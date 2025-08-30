@@ -1,0 +1,7 @@
+node_modules
+
+# Arquivo de variáveis de ambiente
+.env
+
+# Logs e arquivos temporários
+npm-debug.log
