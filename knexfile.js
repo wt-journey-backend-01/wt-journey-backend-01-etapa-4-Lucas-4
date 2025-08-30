@@ -13,8 +13,8 @@ module.exports = {
             host: "127.0.0.1",
             port: 5432,
             user: process.env.POSTGRES_USER,
-            password: "83782813",
-            database: "postgres",
+            password: process.env.LOCAL_PWD,
+            database: process.env.LOCAL_DB,
         },
         migrations: {
             directory: "./db/migrations",
