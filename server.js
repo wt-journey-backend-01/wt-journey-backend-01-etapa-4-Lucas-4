@@ -1,29 +1,22 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const swagger = require("./docs/swagger");
-
-dotenv.config();
+require('dotenv').config();
+const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-const agentesRouter = require("./routes/agentesRoutes");
 const casosRouter = require("./routes/casosRoutes");
-const authRouter = require("./routes/authRoutes"); // Nova rota
-const { errorHandler } = require("./utils/errorHandler");
+const agentesRouter = require("./routes/agentesRoutes");
+const authRouter = require("./routes/authRoutes");
+const PORT = process.env.PORT_SERVER || 3000;
+const cookieParser = require('cookie-parser');
 
 app.use(express.json());
+app.use(cookieParser());
 
-// Rotas públicas de autenticação
-app.use(authRouter);
-
-// Rotas protegidas
 app.use(casosRouter);
 app.use(agentesRouter);
+app.use(authRouter);
 
-swagger(app);
-
-app.use(errorHandler);
+const setupSwagger = require('./docs/swagger');
+setupSwagger(app);
 
 app.listen(PORT, () => {
-    console.log(`Servidor do Departamento de Polícia rodando na porta:${PORT}`);
-});
+    console.log(`Servidor do Departamento de Polícia rodando em http://localhost:${PORT}`);
+}); 

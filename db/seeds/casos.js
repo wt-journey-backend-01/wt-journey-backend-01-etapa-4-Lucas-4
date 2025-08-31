@@ -3,29 +3,21 @@
  * @returns { Promise<void> }
  */
 exports.seed = async function (knex) {
-    // Deletes ALL existing entries
-    await knex('casos').del();
-    await knex('casos').insert([
+    await knex("casos").del();
+    await knex("casos").insert([
         {
-            titulo: 'homicidio',
+            titulo: "Invasão de residência",
             descricao:
-                'Disparos foram reportados às 22:33 do dia 10/07/2007 na região do bairro União, resultando na morte da vítima, um homem de 45 anos.',
-            status: 'aberto',
+                "Ocorrido no bairro Vila Nova às 02h. Três indivíduos arrombaram a porta da residência e levaram joias e dinheiro. A vítima, a dona da casa, estava presente e foi ameaçada.",
+            status: "aberto",
             agente_id: 3,
         },
         {
-            titulo: 'roubo à mão armada',
+            titulo: "Estelionato",
             descricao:
-                'Na madrugada de 15/03/2019, dois suspeitos armados invadiram uma loja de conveniência na Av. Brasil, levando cerca de R$ 12.000,00 em dinheiro.',
-            status: 'aberto',
+                "A vítima, um idoso, foi enganado por um golpe de investimento. O estelionatário prometeu altos rendimentos e levou uma quantia em dinheiro. A vítima não soube identificar o golpista.",
+            status: "solucionado",
             agente_id: 2,
-        },
-        {
-            titulo: 'tráfico de drogas',
-            descricao:
-                'Após denúncia anônima, agentes localizaram um ponto de venda de drogas na comunidade do Morro Azul, apreendendo entorpecentes e prendendo dois indivíduos.',
-            status: 'solucionado',
-            agente_id: 1,
         },
     ]);
 };

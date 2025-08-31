@@ -1,143 +1,198 @@
-const casosRepository = require('../repositories/casosRepository');
-const agentesRepository = require('../repositories/agentesRepository');
-const { AppError } = require('../utils/errorHandler');
+const casosRepository = require("../repositories/casosRepository");
+const agentesRepository = require("../repositories/agentesRepository");
+const { createError } = require('../utils/errorHandler');
+
+async function buildCase(data, method){
+    const allowed = ['titulo', 'descricao', 'status', 'agente_id'];
+    const payload = {};
+
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+        return { valid: false, message: 'Body inválido: esperado um objeto.' };
+    }
+
+	const keys = Object.keys(data);
+    for (const key of keys) {
+        if (!allowed.includes(key)) {
+            return { valid: false, message: `Campo extra não permitido: ${key}` };
+        }
+    }
+
+    if(method !== 'patch'){
+        for (const k of allowed) {
+            if (data[k] === undefined || data[k] === null || (typeof data[k] === 'string' && data[k].trim() === '')) {
+                return { valid: false, message: `Parâmetro obrigatório ausente ou vazio: ${k}` };
+            }
+        }
+    }
+
+	if(data.id){
+        return { valid: false, message: `ID não pode ser sobrescrito.`}
+    }
+
+    for (const k of allowed) {
+        if (Object.prototype.hasOwnProperty.call(data, k) && data[k] !== undefined) {
+            payload[k] = data[k];
+        }
+    }
+    
+    if (payload.titulo !== undefined) {
+        if (typeof payload.titulo !== 'string' || payload.titulo.trim() === '') {
+            return { valid: false, message: 'Titulo enviado é invalido, deve ser um texto.' };
+        }
+    }
+
+    if (payload.descricao !== undefined) {
+        if (typeof payload.descricao !== 'string' || payload.descricao.trim() === '') {
+            return { valid: false, message: 'Descrição enviada é inválida, deve ser um texto.' };
+        }
+    }
+
+    if (payload.status !== undefined) {
+        if(typeof payload.status !== 'string' || payload.status.trim() === '' 
+	      || (payload.status !== 'aberto' && payload.status !== 'solucionado')){
+            return { valid: false, message: "Status informado não é valido, deve ser um texto e ser 'aberto' ou 'solucionado'." };
+        }
+    }
+
+	if (payload.agente_id !== undefined) {
+		const validID = validateID(payload.agente_id)
+		if (validID) {
+			return { valid: false, message: validID.msg }
+		}
+		const hasAgentWithID = await agentesRepository.getAgentByID(payload.agente_id);
+        if(hasAgentWithID.status !== 200){
+            return { valid: false, message: hasAgentWithID.msg };
+        }
+    }
+
+    return { valid: true, payload };
+}
+
+function validateID(id) {
+    const idNumber = Number(id);
+    if (isNaN(idNumber) || !Number.isInteger(idNumber) || idNumber <= 0) {
+        return createError(400, "ID inválido, deve ser número inteiro positivo.");
+    }
+	return null;
+}
 
 async function getAllCasos(req, res) {
-    const agenteId = req.query.agente_id;
-    const status = req.query.status;
+	const { status, agente_id } = req.query;
 
-    const filter = {};
-    if (agenteId) {
-        filter.agente_id = agenteId;
-    }
+	if (status) {
+		if (status !== "aberto" && status !== "solucionado") {
+			const error = createError(400, "Status inválido, deve ser 'aberto' ou 'solucionado'");
+			return res.status(error.status).json({msg: error.msg});
+		}
+		const result = await casosRepository.findByStatus(status);
+		if(result.status >= 400) {
+			return res.status(result.status).json({ msg: result.msg });
+		}
+		return res.status(result.status).json(result.data);
+	}
 
-    if (status) {
-        filter.status = status;
-    }
+	if (agente_id) {
+		const validID = validateID(agente_id)
+		if (validID) {
+			return res.status(validID.status).json({msg: validID.msg});
+		}
+		const result = await casosRepository.findByAgent(agente_id);
+		if(result.status >= 400) {
+			return res.status(result.status).json({ msg: result.msg });
+		}
+		return res.status(result.status).json(result.data);
+	}
 
-    const casos = await casosRepository.findAll(filter);
-    res.json(casos);
+	const result = await casosRepository.findAllCases();
+	if(result.status >= 400) {
+		return res.status(result.status).json({ msg: result.msg });
+	}
+	res.status(result.status).json(result.data);
 }
 
-async function getCasosById(req, res) {
-    const id = Number(req.params.id);
-    if (!id || !Number.isInteger(id)) {
-        throw new AppError(404, 'Id inválido');
-    }
-    const caso = await casosRepository.findById(id);
-    if (!caso) {
-        throw new AppError(404, 'Nenhum caso encontrado para o id especificado');
-    }
-    res.json(caso);
+async function getCaseByID(req, res) {
+	const valid = validateID(req.params.id);
+	if (valid){
+		return res.status(valid.status).json({msg: valid.msg});
+	} 
+	const caseID = req.params.id;
+	const result = await casosRepository.getCaseByID(caseID);
+	if(result.status >= 400) {
+		return res.status(result.status).json({ msg: result.msg });
+	}
+	res.status(result.status).json(result.data);
 }
 
-async function createCaso(req, res) {
-    const agenteId = req.body.agente_id;
-    if (agenteId) {
-        const agente = await agentesRepository.findById(agenteId);
-        if (!agente) {
-            throw new AppError(404, 'Nenhum agente encontrado para o id especificado');
-        }
-    } else {
-        throw new AppError(404, 'Nenhum agente encontrado para o id especificado');
-    }
-    const novoCaso = await casosRepository.create(req.body);
-    res.status(201).json(novoCaso);
+async function insertCase(req, res) {
+	const validCaseData = await buildCase(req.body, 'post');
+	if (!validCaseData.valid) {
+		const error = createError(400, validCaseData.message);
+		return res.status(error.status).json({msg: error.msg});
+	}
+	const existingAgent = await agentesRepository.getAgentByID(req.body.agente_id);
+	if (existingAgent.status !== 200) {
+		const error = createError(existingAgent.status, existingAgent.msg);
+		return res.status(error.status).json({msg: error.msg});
+	}
+	const result = await casosRepository.insertCase(validCaseData.payload);
+	if(result.status >= 400) {
+		return res.status(result.status).json({ msg: result.msg });
+	}
+	return res.status(result.status).json(result.data);
 }
 
-async function updateCaso(req, res) {
-    const id = req.params.id;
-
-    const agenteId = req.body.agente_id;
-    if (agenteId) {
-        const agente = await agentesRepository.findById(agenteId);
-        if (!agente) {
-            throw new AppError(404, 'Nenhum agente encontrado para o id especificado');
-        }
-    } else {
-        throw new AppError(404, 'Nenhum agente encontrado para o id especificado');
-    }
-
-    const caso = await casosRepository.findById(id);
-    if (!caso) {
-        throw new AppError(404, 'Nenhum caso encontrado para o id especificado');
-    }
-
-    const updatedCaso = await casosRepository.update(id, req.body);
-    res.status(200).json(updatedCaso);
+async function updateCaseById(req, res){
+	const validID = validateID(req.params.id)
+	if (validID) {
+		return res.status(validID.status).json({msg: validID.msg});
+	}
+	const validCaseData = await buildCase(req.body, 'put');
+	if (!validCaseData.valid) {
+		const error = createError(400, validCaseData.message);
+		return res.status(error.status).json({msg: error.msg});
+	}
+	const result = await casosRepository.updateCaseById(req.params.id, validCaseData.payload);
+	if(result.status >= 400) {
+		return res.status(result.status).json({ msg: result.msg });
+	}
+	return res.status(result.status).json(result.data);
 }
 
-async function updatePartialCaso(req, res) {
-    const id = req.params.id;
-
-    if (req.body.id) {
-        throw new AppError(400, 'Parâmetros inválidos', ['O id não pode ser atualizado']);
+async function patchCaseByID(req, res) {
+	const validID = validateID(req.params.id)
+	if (validID) {
+		return res.status(validID.status).json({msg: validID.msg});
+	}
+	const validCaseData = await buildCase(req.body, 'patch');
+	if (!validCaseData.valid) {
+		const error = createError(400, validCaseData.message);
+		return res.status(error.status).json({msg: error.msg});
+	}
+	const result = await casosRepository.patchCaseByID(req.params.id, validCaseData.payload);
+    if(result.status >= 400) {
+        return res.status(result.status).json({ msg: result.msg });
     }
-
-    const agenteId = req.body.agente_id;
-    if (agenteId) {
-        const agente = await agentesRepository.findById(agenteId);
-        if (!agente) {
-            throw new AppError(404, 'Nenhum agente encontrado para o id especificado');
-        }
-    }
-
-    const caso = await casosRepository.findById(id);
-    if (!caso) {
-        throw new AppError(404, 'Nenhum caso encontrado para o id especificado');
-    }
-
-    const updatedCaso = await casosRepository.updatePartial(id, req.body);
-    res.status(200).json(updatedCaso);
+    return res.status(result.status).json(result.data);
 }
 
-async function deleteCaso(req, res) {
-    const id = req.params.id;
-
-    const caso = await casosRepository.findById(id);
-    if (!caso) {
-        throw new AppError(404, 'Nenhum caso encontrado para o id especificado');
-    }
-
-    const result = await casosRepository.remove(id);
-    if (!result) {
-        throw new AppError(500, 'Erro ao remover o agente');
-    }
-
-    res.status(204).send();
+async function deleteCaseById(req, res) {
+	const invalid = validateID(req.params.id);
+	if (invalid){
+		return res.status(invalid.status).json({msg: invalid.msg});
+	}
+	const result = await casosRepository.deleteCaseById(req.params.id);
+	if (result.status === 204) {
+		return res.status(204).send();
+	}
+	return res.status(result.status).json({ msg: result.msg });
 }
 
-async function getAgenteByCasoId(req, res) {
-    const casoId = req.params.caso_id;
-    const caso = await casosRepository.findById(casoId);
-    if (!caso) {
-        throw new AppError(404, 'Nenhum caso encontrado para o id especificado');
-    }
-    const agenteId = caso.agente_id;
-    const agente = await agentesRepository.findById(agenteId);
-    if (!agente) {
-        throw new AppError(404, 'Nenhum agente encontrado para o agente_id especificado');
-    }
-    res.status(200).json(agente);
-}
-
-async function filter(req, res) {
-    const term = req.query.q;
-
-    const casos = await casosRepository.filter(term);
-    if (casos.length === 0) {
-        throw new AppError(404, 'Nenhum caso encontrado para a busca especificada');
-    }
-    res.json(casos);
-}
 
 module.exports = {
-    getAllCasos,
-    getCasosById,
-    createCaso,
-    updateCaso,
-    updatePartialCaso,
-    deleteCaso,
-    getAgenteByCasoId,
-    filter,
-};
+	getAllCasos,
+	getCaseByID,
+	insertCase,
+	updateCaseById,
+	patchCaseByID,
+	deleteCaseById
+}

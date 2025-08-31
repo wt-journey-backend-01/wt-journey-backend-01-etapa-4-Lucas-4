@@ -1,497 +1,199 @@
-const express = require("express");
+const express = require('express')
 const router = express.Router();
-const casosController = require("../controllers/casosController");
-const {
-    newCasoValidation,
-    updateCasoValidation,
-    partialUpdateCasoValidation,
-} = require("../utils/casosValidations");
-const { protect } = require("../utils/auth");
-
-// Aplica o middleware de proteção a todas as rotas neste arquivo
-router.use("/casos", protect);
+const casosController = require('../controllers/casosController');
+const authMiddleware = require('../middlewares/authMiddleware')
 
 /**
- * @openapi
- * /casos/search:
- *  get:
- *    security:
- *      - bearerAuth: []
- *    summary: Retorna uma lista de casos
- *    description: Retorna uma lista de casos com base no termo de pesquisa
- *    tags: [Casos]
- *    parameters:
- *      - name: q
- *        in: query
- *        required: false
- *        schema:
- *          type: string
- *          example: homicidio
- *    responses:
- *      200:
- *        description: Lista de casos
- *        content:
- *          application/json:
- *            schema:
- *              type: array
- *              items:
- *                $ref: '#/components/schemas/Caso'
- *      404:
- *        description: Nenhum caso encontrado para o termo pesquisado
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum caso encontrado para a busca especificada
- *                errors:
- *                  type: string
- *                  example: []
+ * @swagger
+ * tags:
+ *   name: Casos
+ *   description: Endpoints relacionados aos casos policiais
  */
-router.get("/casos/search", casosController.filter);
 
 /**
- * @openapi
- * /casos/{caso_id}/agente:
- *  get:
- *    security:
- *      - bearerAuth: []
- *    summary: Retorna o agente responsável por um caso específico
- *    description: Retorna os detalhes do agente responsável por um caso com base no id do caso
- *    tags: [Casos]
- *    parameters:
- *      - name: caso_id
- *        in: path
- *        required: true
- *        schema:
- *          type: integer
- *          example: 1
- *    responses:
- *      200:
- *        description: Detalhes do agente responsável pelo caso
- *        content:
- *          application/json:
- *            schema:
- *              type: array
- *              items:
- *                $ref: '#/components/schemas/Agente'
- *      400:
- *        description: Identificador inválido
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 400
- *                message:
- *                  type: string
- *                  example: Parâmetros inválidos
- *                errors:
- *                  type: string
- *                  example:
- *                    - O parâmetro "caso_id" deve ser um id válido
- *      404:
- *        description: Nenhum caso ou agente encontados
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum caso encontrado para o id especificado
- *                errors:
- *                  type: string
- *                  example: []
- */
-router.get("/casos/:caso_id/agente", casosController.getAgenteByCasoId);
-
-/**
- * @openapi
- * /casos/{id}:
- *  get:
- *    security:
- *      - bearerAuth: []
- *    summary: Retorna um caso específico
- *    description: Retorna os detalhes de um caso pelo seu id
- *    tags: [Casos]
- *    parameters:
- *      - name: id
- *        in: path
- *        required: true
- *        schema:
- *          type: integer
- *          example: 1
- *    responses:
- *      200:
- *        description: Detalhes do caso retornados com sucesso
- *        content:
- *          application/json:
- *            schema:
- *              type: array
- *              items:
- *                $ref: '#/components/schemas/Caso'
- *      400:
- *        description: Identificador inválido
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 400
- *                message:
- *                  type: string
- *                  example: Parâmetros inválidos
- *                errors:
- *                  type: string
- *                  example:
- *                    - O parâmetro "id" deve ser válido
- *      404:
- *        description: Nenhum caso para o id especificado
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum caso encontrado para o id especificado
- *                errors:
- *                  type: string
- *                  example: []
- */
-router.get("/casos/:id", casosController.getCasosById);
-
-/**
- * @openapi
+ * @swagger
  * /casos:
- *  get:
- *    security:
- *      - bearerAuth: []
- *    summary: Retorna todos os casos
- *    description: Retorna uma lista de todos os casos disponíveis
- *    tags: [Casos]
- *    responses:
- *      200:
- *        description: Lista todos os casos
- *        content:
- *          application/json:
- *            schema:
- *              type: array
- *              items:
- *                $ref: '#/components/schemas/Caso'
+ *   get:
+ *     summary: Lista todos os casos registrados, com opção de filtros
+ *     tags: [Casos]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [aberto, solucionado]
+ *         required: false
+ *         description: Filtra os casos pelo status
+ *       - in: query
+ *         name: agente_id
+ *         schema:
+ *           type: string
+ *           format: id
+ *         required: false
+ *         description: Filtra os casos por agente responsável
+ *     responses:
+ *       200:
+ *         description: Lista de casos retornada com sucesso
+ *       400:
+ *         description: Parâmetros inválidos
  */
-router.get("/casos", casosController.getAllCasos);
 
 /**
- * @openapi
+ * @swagger
+ * /casos/{id}:
+ *   get:
+ *     summary: Retorna os detalhes de um caso específico
+ *     tags: [Casos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: id
+ *         description: ID do caso
+ *     responses:
+ *       200:
+ *         description: Caso encontrado com sucesso
+ *       404:
+ *         description: Caso não encontrado
+ */
+
+/**
+ * @swagger
  * /casos:
- *  post:
- *    security:
- *      - bearerAuth: []
- *    summary: Cria um novo caso
- *    description: Cria um novo caso com os dados fornecidos
- *    tags: [Casos]
- *    requestBody:
- *      required: true
- *      content:
- *        application/json:
- *          schema:
- *            $ref: '#/components/schemas/NovoCaso'
- *    responses:
- *      201:
- *        description: Caso criado com sucesso
- *        content:
- *          application/json:
- *            schema:
- *              $ref: '#/components/schemas/Caso'
- *      400:
- *        description: Parâmetros inválidos
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 400
- *                message:
- *                  type: string
- *                  example: Parâmetros inválidos
- *                errors:
- *                  type: string
- *                  example:
- *                    - O status é obrigatório
- *                    - O status deve ser "aberto" ou "solucionado"
- *      404:
- *        description: O agente definido não existe na base de dados
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum agente encontrado para o agente_id especificado
- *                errors:
- *                  type: string
- *                  example: []
+ *   post:
+ *     summary: Cria um novo caso policial
+ *     tags: [Casos]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - titulo
+ *               - descricao
+ *               - status
+ *               - agente_id
+ *             properties:
+ *               titulo:
+ *                 type: string
+ *               descricao:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [aberto, solucionado]
+ *               agente_id:
+ *                 type: string
+ *                 format: id
+ *     responses:
+ *       201:
+ *         description: Caso criado com sucesso
+ *       400:
+ *         description: Dados inválidos
  */
-router.post("/casos", newCasoValidation, casosController.createCaso);
 
 /**
- * @openapi
+ * @swagger
  * /casos/{id}:
- *  put:
- *    security:
- *      - bearerAuth: []
- *    summary: Atualiza um caso
- *    description: Atualiza um caso com os dados fornecidos
- *    tags: [Casos]
- *    parameters:
- *      - name: id
- *        in: path
- *        required: true
- *        schema:
- *          type: integer
- *          example: 1
- *    requestBody:
- *      required: true
- *      content:
- *        application/json:
- *          schema:
- *            $ref: '#/components/schemas/NovoCaso'
- *    responses:
- *      200:
- *        description: Caso atualizado com sucesso
- *        content:
- *          application/json:
- *            schema:
- *              $ref: '#/components/schemas/Caso'
- *      400:
- *        description: Parâmetros inválidos
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 400
- *                message:
- *                  type: string
- *                  example: Parâmetros inválidos
- *                errors:
- *                  type: string
- *                  example:
- *                    - O status é obrigatório
- *                    - O status deve ser "aberto" ou "solucionado"
- *      404:
- *        description: O agente definido não existe na base de dados
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum agente encontrado para o agente_id especificado
- *                errors:
- *                  type: string
- *                  example: []
+ *   put:
+ *     summary: Atualiza todos os dados de um caso
+ *     tags: [Casos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - titulo
+ *               - descricao
+ *               - status
+ *               - agente_id
+ *             properties:
+ *               titulo:
+ *                 type: string
+ *               descricao:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [aberto, solucionado]
+ *               agente_id:
+ *                 type: string
+ *     responses:
+ *       204:
+ *         description: Caso atualizado com sucesso
+ *       404:
+ *         description: Caso não encontrado
  */
-router.put("/casos/:id", updateCasoValidation, casosController.updateCaso);
 
 /**
- * @openapi
+ * @swagger
  * /casos/{id}:
- *  patch:
- *    security:
- *      - bearerAuth: []
- *    summary: Atualiza um caso
- *    description: Atualiza um caso parcialmente com os dados fornecidos
- *    tags: [Casos]
- *    parameters:
- *      - name: id
- *        in: path
- *        required: true
- *        schema:
- *          type: integer
- *          example: 1
- *    requestBody:
- *      required: false
- *      content:
- *        application/json:
- *          schema:
- *            $ref: '#/components/schemas/NovoCaso'
- *    responses:
- *      200:
- *        description: Caso atualizado com sucesso
- *        content:
- *          application/json:
- *            schema:
- *              $ref: '#/components/schemas/Caso'
- *      400:
- *        description: Parâmetros inválidos
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 400
- *                message:
- *                  type: string
- *                  example: Parâmetros inválidos
- *                errors:
- *                  type: string
- *                  example:
- *                    - O status deve ser "aberto" ou "solucionado"
- *      404:
- *        description: O agente definido não existe na base de dados
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum agente encontrado para o agente_id especificado
- *                errors:
- *                  type: string
- *                  example: []
+ *   patch:
+ *     summary: Atualiza parcialmente os dados de um caso
+ *     tags: [Casos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               titulo:
+ *                 type: string
+ *               descricao:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [aberto, solucionado]
+ *               agente_id:
+ *                 type: string
+ *     responses:
+ *       204:
+ *         description: Campos atualizados com sucesso
+ *       404:
+ *         description: Caso não encontrado
  */
-router.patch(
-    "/casos/:id",
-    partialUpdateCasoValidation,
-    casosController.updatePartialCaso
-);
 
 /**
- * @openapi
+ * @swagger
  * /casos/{id}:
- *  delete:
- *    security:
- *      - bearerAuth: []
- *    summary: Apaga um caso específico
- *    description: Remove um caso da base de dados
- *    tags: [Casos]
- *    parameters:
- *      - name: id
- *        in: path
- *        required: true
- *        schema:
- *          type: integer
- *          example: 1
- *    responses:
- *      204:
- *        description: Caso removido com sucesso
- *        content:
- *          application/json:
- *            schema:
- *              type: array
- *              items:
- *                $ref: '#/components/schemas/Caso'
- *      400:
- *        description: Identificador inválido
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 400
- *                message:
- *                  type: string
- *                  example: Parâmetros inválidos
- *                errors:
- *                  type: string
- *                  example:
- *                    - O parâmetro "id" deve ser válido
- *      404:
- *        description: Nenhum caso para o id especificado
- *        content:
- *          application/json:
- *            schema:
- *              type: object
- *              properties:
- *                status:
- *                  type: integer
- *                  example: 404
- *                message:
- *                  type: string
- *                  example: Nenhum caso encontrado para o id especificado
- *                errors:
- *                  type: string
- *                  example: []
- */
-router.delete("/casos/:id", casosController.deleteCaso);
-
-/**
- * @openapi
- * components:
- *  schemas:
- *    Caso:
- *      type: object
- *      properties:
- *        id:
- *          type: integer
- *          example: 1
- *        titulo:
- *          type: string
- *          example: "Homicídio"
- *        descricao:
- *          type: string
- *          example: "Disparos foram reportados às 22:33 do dia 10/07/2007 na região do bairro União, resultando na morte da vítima, um homem de 45 anos"
- *        status:
- *          type: string
- *          enum: ["aberto", "fechado"]
- *          example: "aberto"
- *        agente_id:
- *          type: integer
- *          example: 1
- *    NovoCaso:
- *      type: object
- *      properties:
- *        titulo:
- *          type: string
- *          example: "Homicídio"
- *        descricao:
- *          type: string
- *          example: "Disparos foram reportados às 22:33 do dia 10/07/2007 na região do bairro União, resultando na morte da vítima, um homem de 45 anos"
- *        status:
- *          type: string
- *          enum: ["aberto", "fechado"]
- *          example: "aberto"
- *        agente_id:
- *          type: integer
- *          example: 1
+ *   delete:
+ *     summary: Remove um caso do sistema
+ *     tags: [Casos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Caso deletado com sucesso
+ *       404:
+ *         description: Caso não encontrado
  */
 
-module.exports = router;
+router.get('/casos', authMiddleware, casosController.getAllCasos);
+router.get('/casos/:id', authMiddleware, casosController.getCaseByID);
+router.post('/casos', authMiddleware, casosController.insertCase);
+router.put('/casos/:id', authMiddleware, casosController.updateCaseById);
+router.patch('/casos/:id', authMiddleware, casosController.patchCaseByID);
+router.delete('/casos/:id', authMiddleware, casosController.deleteCaseById);
+
+module.exports = router

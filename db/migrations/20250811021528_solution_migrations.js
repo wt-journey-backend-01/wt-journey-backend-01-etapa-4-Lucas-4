@@ -2,27 +2,33 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
+
 exports.up = async function (knex) {
-    await knex.schema.createTable("agentes", function (table) {
+    await knex.schema.createTable("agentes", (table) => {
         table.increments("id").primary();
         table.string("nome").notNullable();
-        table.string("email").notNullable().unique();
-        table.string("senha").notNullable();
         table.date("dataDeIncorporacao").notNullable();
         table.string("cargo").notNullable();
     });
 
-    await knex.schema.createTable("casos", function (table) {
+    await knex.schema.createTable("casos", (table) => {
         table.increments("id").primary();
         table.string("titulo").notNullable();
-        table.text("descricao").notNullable();
-        table.enum("status", ["aberto", "solucionado"]);
+        table.string("descricao").notNullable();
+        table.string("status").notNullable();
         table
             .integer("agente_id")
             .references("id")
             .inTable("agentes")
-            .notNullable()
-            .onDelete("CASCADE");
+            .nullable()
+            .onDelete("set null");
+    });
+
+    await knex.schema.createTable("usuarios", (table) => {
+        table.increments("id").primary();
+        table.string("nome").notNullable();
+        table.string("email").unique().notNullable();
+        table.string("senha").notNullable();
     });
 };
 
@@ -30,7 +36,9 @@ exports.up = async function (knex) {
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
+
 exports.down = async function (knex) {
+    await knex.schema.dropTableIfExists("usuarios");
     await knex.schema.dropTableIfExists("casos");
     await knex.schema.dropTableIfExists("agentes");
 };

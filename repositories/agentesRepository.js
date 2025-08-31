@@ -1,115 +1,232 @@
-const db = require("../db/db");
-const { AppError } = require("../utils/errorHandler");
+const { v4: uuidv4 } = require('uuid');
+const { createError } = require('../utils/errorHandler');
+const { isValidDate } = require('../utils/formatDate');
+const db = require('../db/db');
 
-async function findAll(filter = {}, orderBy = ["id", "asc"]) {
-    try {
-        const result = await db("agentes")
-            .select("id", "nome", "email", "dataDeIncorporacao", "cargo")
-            .where(filter)
-            .orderBy(orderBy[0], orderBy[1]);
-        return result.map((agente) => ({
-            ...agente,
-            dataDeIncorporacao: new Date(agente.dataDeIncorporacao)
-                .toISOString()
-                .split("T")[0],
-        }));
-    } catch (error) {
-        throw new AppError(500, "Erro ao buscar agentes", [error.message]);
-    }
-}
+async function findAllAgents() {
+    try{
+        const agentes = await db.select().from('agentes');
 
-async function findById(id) {
-    try {
-        const result = await db("agentes")
-            .select("id", "nome", "email", "dataDeIncorporacao", "cargo")
-            .where({ id })
-            .first();
-        return result;
-    } catch (error) {
-        throw new AppError(500, "Erro ao buscar agente", [error.message]);
-    }
-}
-
-async function findByEmail(email) {
-    try {
-        const result = await db("agentes").select("*").where({ email }).first();
-        return result;
-    } catch (error) {
-        throw new AppError(500, "Erro ao buscar agente por email", [
-            error.message,
-        ]);
-    }
-}
-
-async function create(agente) {
-    try {
-        const [newAgente] = await db("agentes")
-            .insert(agente)
-            .returning(["id", "nome", "email", "dataDeIncorporacao", "cargo"]);
-        return {
-            ...newAgente,
-            dataDeIncorporacao: new Date(newAgente.dataDeIncorporacao)
-                .toISOString()
-                .split("T")[0],
-        };
-    } catch (error) {
-        if (error.code === "23505") {
-            // unique_violation
-            throw new AppError(400, "O email fornecido já está em uso.");
+        if(!agentes.length){
+            return createError(404, 'Não foram encontrados agentes na base de dados.');
         }
-        throw new AppError(500, "Erro ao criar agente", [error.message]);
-    }
-}
-
-async function update(id, updatedAgente) {
-    try {
-        const [agente] = await db("agentes")
-            .update(updatedAgente)
-            .where({ id })
-            .returning(["id", "nome", "email", "dataDeIncorporacao", "cargo"]);
+    
         return {
-            ...agente,
-            dataDeIncorporacao: new Date(agente.dataDeIncorporacao)
-                .toISOString()
-                .split("T")[0],
+            status: 200,
+            data: agentes.map(agente => ({
+                ...agente,
+                dataDeIncorporacao: new Date(agente.dataDeIncorporacao).toISOString().split('T')[0]
+            })),
+            msg: "Lista de agentes obtida com sucesso",
         };
-    } catch (error) {
-        throw new AppError(500, "Erro ao atualizar agente", [error.message]);
+    }catch(e){
+        return createError(400, `Erro ao realizar a consulta na base de dados, erro detalhado: ${e.message}`);
     }
 }
 
-async function updatePartial(id, partialAgente) {
-    try {
-        const [agente] = await db("agentes")
-            .update(partialAgente)
-            .where({ id })
-            .returning(["id", "nome", "email", "dataDeIncorporacao", "cargo"]);
+async function getAgentByID(id) {
+    try{
+        const agente = await db.select().from('agentes').where('agentes.id', id);
+
+        if(!agente.length){ 
+            return createError(404, `Não foi encontrado nenhum agente com o id: ${id}, na nossa base de dados.`);
+        };
+        
         return {
-            ...agente,
-            dataDeIncorporacao: new Date(agente.dataDeIncorporacao)
-                .toISOString()
-                .split("T")[0],
+            status: 200,
+            data:  {
+                ...agente[0],
+                dataDeIncorporacao: new Date(agente[0].dataDeIncorporacao).toISOString().split('T')[0]
+            },
+            msg: "Agente encontrado com sucesso",
         };
-    } catch (error) {
-        throw new AppError(500, "Erro ao atualizar agente", [error.message]);
+    }catch(e){
+        return createError(400, `Erro ao realizar a consulta do agente de id: ${id}, erro detalhado: ${e.message}`);
     }
 }
 
-async function remove(id) {
-    try {
-        const rows = await db("agentes").del().where({ id });
-        return !!rows;
-    } catch (error) {
-        throw new AppError(500, "Erro ao excluir agente", [error.message]);
+async function findAllAgentCases(agentID) {
+    try{
+        const agentCases = await db('casos as c')
+                            .join('agentes as a', 'a.id', 'c.agente_id')
+                            .select('c.*') 
+                            .where('c.agente_id', agentID);
+
+        if(!agentCases.length){ 
+            return createError(404, `Não foi encontrado nenhum caso pertecente ao agente com o id: ${agentID}, na nossa base de dados.`);
+        };
+        
+        return {
+            status: 200,
+            data:  agentCases,
+            msg: "Agente encontrado com sucesso",
+        };
+    }catch(e){
+        return createError(400, `Erro ao realizar a consulta do agente de id: ${agentID}, erro detalhado: ${e.message}`);
+    }
+}
+
+async function findByCargo(cargo) {
+    try{
+        const agentes = await db.select('*').from('agentes').where('agentes.cargo', cargo);
+
+        if(!agentes.length){
+            return createError(404, `Não foi encontrado nenhum agente com o cargo ${cargo}, na nossa base de dados.`);
+        };
+
+        return {
+            status: 200,
+            data: agentes.map(agente => ({
+                ...agente,
+                dataDeIncorporacao: new Date(agente.dataDeIncorporacao).toISOString().split('T')[0]
+            })),
+            msg: 'Agente(s) encontrado(s) com sucesso.'
+        };
+    }catch(e){
+        return createError(400, `Erro ao realizar a consulta do cargo: ${cargo}, erro detalhado: ${e.message}`);
+    }
+}
+
+async function sortByIncorporation(sortParam) {
+    try{
+        const sorted = await db.select('*').from('agentes').orderBy("dataDeIncorporacao", sortParam === "dataDeIncorporacao" ? 'asc' : 'desc');
+
+        if(!sorted.length){
+            return createError(404, "Não foram encontrados nenhum agente, não sendo possível fazer sua ordenação.");
+        }
+        
+        return {
+            status: 200,
+            data: sorted.map(sortedAgent => ({
+                ...sortedAgent,
+                dataDeIncorporacao: new Date(sortedAgent.dataDeIncorporacao).toISOString().split('T')[0]
+            })),
+            msg: "Busca de agentes ordenados por dataDeIncorporacao realizada com sucesso."
+        };
+    }catch(e){
+        return createError(400, `Erro ao realizar a ordenação dos agentes, erro detalhado: ${e.message}`);
+    }
+}
+
+async function insertAgent(newAgent) {
+    try{
+        const [agentInsertedID] = await db.insert(newAgent).into('agentes').returning("*");
+        
+        return {
+            status: 201,
+            data: {
+                ...agentInsertedID,
+                dataDeIncorporacao: new Date(agentInsertedID.dataDeIncorporacao).toISOString().split('T')[0]
+            },
+            msg: "Agente inserido com sucesso",
+        };
+    }catch(e){
+        return createError(400, `Erro ao realizar a inserção de um novo agente, erro detalhado: ${e.message}`);
+    }
+}
+
+async function updateAgentById(agentID, agentToBeUpdated) {
+    try{
+        const hasAgentWithID = await db.select('*').from('agentes').where('agentes.id', agentID);
+
+        if(!hasAgentWithID.length){
+            return createError(404, `Não existe um agente com esse ID ${agentID}`);
+        }
+
+        let updatedAgent = await db('agentes')
+                                .where('agentes.id', agentID)
+                                .update(agentToBeUpdated)
+                                .returning(['id', 'nome', 'dataDeIncorporacao', 'cargo']);
+
+        if(!updatedAgent.length){
+            return createError(400, `Não foi possível realizar a atualização do agente de ID: ${agentID}`);
+        }
+
+        const updatedAgentObject = Object.assign({}, updatedAgent[0]);
+
+        return {
+            status: 200,
+            data:{
+                ...updatedAgentObject,
+                dataDeIncorporacao: new Date(updatedAgentObject.dataDeIncorporacao).toISOString().split('T')[0]
+            },
+            msg: `Agente de ID ${agentID} atualizado com sucesso.`
+        }
+
+    }catch(e){
+        return createError(400, `Erro ao atualizar agente, erro detalhado: ${e.message}`)
+    }
+}
+
+async function patchAgentByID(agentID, req) {
+    try{
+
+        const hasAgentWithID = await db.select('*').from('agentes').where('agentes.id', agentID);
+        
+        if(!hasAgentWithID.length){
+            return createError(404, `Não existe um agente com esse ID: ${agentID}`);
+        }
+    
+        let patchedAgent = await db('agentes')
+            .where('agentes.id', agentID)
+            .update(req)
+            .returning(['id', 'nome', 'dataDeIncorporacao', 'cargo']);
+        
+        if(!patchedAgent.length){
+           return createError(400, `Não foi possível realizar a atualização do agente de ID: ${agentID}.`);
+        }
+
+        const patchedAgentObject = Object.assign({}, patchedAgent[0]);
+
+        return {
+            status: 200,
+            data:{
+                ...patchedAgentObject,
+                dataDeIncorporacao: new Date(patchedAgentObject.dataDeIncorporacao).toISOString().split('T')[0]
+            },
+            msg: `Agente parcialmente atualizado com sucesso.`
+        }
+
+    }catch(e){
+        return createError(400, `Erro ao atualizar agente, erro detalhado: ${e.message}`)
+    }
+}
+
+async function deleteAgentById(agentID) {
+    try{
+        const hasAgentWithID = await db.select('*').from('agentes').where('agentes.id', agentID);
+        
+        if(!hasAgentWithID.length){
+            return createError(404, `Não existe um agente com esse ID ${agentID}`);
+        }
+
+        const deletedAgent = await db('agentes')
+                            .where('agentes.id', agentID)
+                            .del();
+
+        if(deletedAgent === 0){
+            return createError(400, `Não foi possível realizar a exclusão do agente com ID: ${agentID}`);
+        }
+
+        return {
+            status: 204, 
+            data: null,
+            msg: "Agente excluído com sucesso!"
+        };
+    }
+    catch(e){
+        return createError(400, `Erro ao excluir agente, erro detalhado: ${e.message}`);
     }
 }
 
 module.exports = {
-    findAll,
-    findById,
-    findByEmail,
-    create,
-    update,
-    updatePartial,
-    remove,
+    findAllAgents,
+    findByCargo,
+    findAllAgentCases,
+    sortByIncorporation,
+    getAgentByID,
+    insertAgent,
+    updateAgentById,
+    patchAgentByID,
+    deleteAgentById
 };
